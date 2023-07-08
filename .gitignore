@@ -1,0 +1,8 @@
+duck-runner
+a.out
+*.o
+*.obj
+*.exe
+*~
+*.swp
+*.swo
