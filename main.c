@@ -256,18 +256,18 @@ main(int argc, char *argv[])
 			case SDL_KEYDOWN:
 				switch (e.key.keysym.sym) {
 				case 'q':
-				    quit = true;
-				    break;
+					quit = true;
+					break;
 				case SDLK_UP: case 'w':
 					if (pato.pos.y + pato.pos.h >= ground.y)
-				    yvelocity = -400;
+						yvelocity = -400;
 				}
 				break;
 			case SDL_KEYUP:
 				switch (e.key.keysym.sym) {
 				case SDLK_UP: case 'w':
-					if (yvelocity < -150)
-				    yvelocity += 150;
+					if (yvelocity < -200)
+						yvelocity = -200;
 				}
 			}
 		}
