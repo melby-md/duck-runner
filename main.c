@@ -8,8 +8,7 @@
 #include "stb_image.h"
 #include "SDL.h"
 
-#define POOL_SIZE 15
-
+#define POOL_SIZE 7
 
 struct entity {
 	SDL_Rect pos;
@@ -17,25 +16,19 @@ struct entity {
 };
 
 struct item {
-	enum : Sint8 {
-		NIL = -1,
+	enum : Uint8 {
 		COIN = 0,
 		CACTUS = 1
 	} type;
 
-	union {
-		int x;
-		struct item *next;
-	};
+	int x;
 };
 
 struct item_arr {
 	struct entity e[2];
-	struct item *first;
+	Uint8 count;
 	struct item pool[POOL_SIZE];
 };
-
-static void items_render(SDL_Renderer *, struct item_arr *);
 
 static inline void
 entity_render(SDL_Renderer *r, const struct entity *e)
@@ -49,24 +42,28 @@ entity_render(SDL_Renderer *r, const struct entity *e)
 }
 
 static inline void
-item_remove(struct item_arr *a, struct item *it)
+item_remove(struct item_arr *a, Uint8 idx)
 {
-	it->type = NIL;
-	it->next = a->first;
-	a->first = it;
+	a->count--;
+	struct item *last = &a->pool[a->count];
+	struct item *deleted = &a->pool[idx];
+
+	deleted->x = last->x;
+	deleted->type = last->type;
 }
 
 static int
 item_create(struct item_arr *a)
 {
-	if (a->first == NULL)
+	if (a->count == POOL_SIZE)
 		return -1;
-	
-	struct item *i = a->first;
-	a->first = i->next;
+
+	struct item *i = &a->pool[a->count];
 
 	i->x = 512;
 	i->type = rand() & 1;
+
+	a->count++;
 
 	return 0;
 }
@@ -74,16 +71,13 @@ item_create(struct item_arr *a)
 static void
 item_move(struct item_arr *a, float dT, const struct entity *pato)
 {
-	for (int i = 0; i < POOL_SIZE; i++) {
+	for (int i = 0; i < a->count; i++) {
 		struct item *it = &a->pool[i];
 		struct entity *e = &a->e[it->type];
 		bool col = true;
 
-		if (it->type == NIL)
-			continue;
-
 		if (it->x + e->pos.w <= 0) {
-			item_remove(a, it);
+			item_remove(a, i);
 			continue;
 		}
 
@@ -101,7 +95,7 @@ item_move(struct item_arr *a, float dT, const struct entity *pato)
 
 		if (col) {
 			if (it->type == COIN)
-				item_remove(a, it);
+				item_remove(a, i);
 			else if (it->type == CACTUS)
 				exit(0);
 		}
@@ -114,10 +108,7 @@ item_move(struct item_arr *a, float dT, const struct entity *pato)
 static void
 items_render(SDL_Renderer *r, struct item_arr *a)
 {
-	for (int i = 0; i < POOL_SIZE; i++) {
-		if (a->pool[i].type == NIL) {
-			continue;
-		}
+	for (int i = 0; i < a->count; i++) {
 
 		struct entity *e = &a->e[a->pool[i].type];
 		e->pos.x = a->pool[i].x;
@@ -162,7 +153,7 @@ LoadImage(char *filename)
 int
 main(int argc, char *argv[])
 {
-	struct item_arr items;
+	struct item_arr items = {.count = 0};
 	int size = 512;
 	float yvelocity = 0.0;
 
@@ -199,12 +190,6 @@ main(int argc, char *argv[])
 		);
 		SDL_Log("SDL_CreateRenderer(): %s", SDL_GetError());
 		return 1;
-	}
-
-	items.first = &items.pool[0];
-	for (int i = 0; i < POOL_SIZE; i++) {
-		items.pool[i].next = &items.pool[i+1];
-		items.pool[i].type = NIL;
 	}
 
 	srand(time(NULL));
