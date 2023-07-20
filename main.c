@@ -8,23 +8,34 @@
 #include "stb_image.h"
 #include "SDL.h"
 
-#define SIZE 15
+#define POOL_SIZE 15
+
 
 struct entity {
 	SDL_Rect pos;
 	SDL_Texture *sprite;
 };
 
-struct item_arr {
-	Sint8 first, last;
-	struct item {
+struct item {
+	enum : Sint8 {
+		NIL = -1,
+		COIN = 0,
+		CACTUS = 1
+	} type;
+
+	union {
 		int x;
-		enum : Uint8 {COIN, CACTUS, NIL} type;
-	} arr[SIZE];
-	struct entity es[2];
+		struct item *next;
+	};
 };
 
-static void items_render(SDL_Renderer *r, struct item_arr *q);
+struct item_arr {
+	struct entity e[2];
+	struct item *first;
+	struct item pool[POOL_SIZE];
+};
+
+static void items_render(SDL_Renderer *, struct item_arr *);
 
 static inline void
 entity_render(SDL_Renderer *r, const struct entity *e)
@@ -37,43 +48,44 @@ entity_render(SDL_Renderer *r, const struct entity *e)
 	);
 }
 
-static int
-item_remove(struct item_arr *q);
-
-static void
-item_create(struct item_arr *q)
+static inline void
+item_remove(struct item_arr *a, struct item *it)
 {
-	int i;
+	it->type = NIL;
+	it->next = a->first;
+	a->first = it;
+}
 
-	i = (q->last + 1) % SIZE;
-	if (i == q->first)
-		return;
+static int
+item_create(struct item_arr *a)
+{
+	if (a->first == NULL)
+		return -1;
+	
+	struct item *i = a->first;
+	a->first = i->next;
 
-	q->arr[q->last].x = 512;
-	if (rand() % 2)
-		q->arr[q->last].type = COIN;
-	else
-		q->arr[q->last].type = CACTUS;
+	i->x = 512;
+	i->type = rand() & 1;
 
-	q->last = i;
+	return 0;
 }
 
 static void
-item_move(struct item_arr *q, float dT, struct entity *pato)
+item_move(struct item_arr *a, float dT, const struct entity *pato)
 {
-	if (q->first == q->last)
-		return;
-
-	if (q->arr[q->first].type == NIL || q->arr[q->first].x + 20 <= 0)
-		item_remove(q);
-
-	for (int i = q->first; i != q->last; i = (i+1) % SIZE) {
-		struct item *it= &q->arr[i];
-		struct entity *e= &q->es[it->type];
+	for (int i = 0; i < POOL_SIZE; i++) {
+		struct item *it = &a->pool[i];
+		struct entity *e = &a->e[it->type];
 		bool col = true;
 
 		if (it->type == NIL)
 			continue;
+
+		if (it->x + e->pos.w <= 0) {
+			item_remove(a, it);
+			continue;
+		}
 
 		if(e->pos.y + e->pos.h <= pato->pos.y)
 			col = false;
@@ -89,40 +101,26 @@ item_move(struct item_arr *q, float dT, struct entity *pato)
 
 		if (col) {
 			if (it->type == COIN)
-				it->type = NIL;
+				item_remove(a, it);
 			else if (it->type == CACTUS)
 				exit(0);
 		}
 
-		q->arr[i].x -= (int)(dT * 200);
+		it->x -= (int)(dT * 200);
 	}
 }
 
 
-static int
-item_remove(struct item_arr *q)
-{
-	if (q->first == q->last)
-		return -1;
-
-	q->first = (q->first + 1) % SIZE;
-
-	return 0;
-}
-
 static void
-items_render(SDL_Renderer *r, struct item_arr *q)
+items_render(SDL_Renderer *r, struct item_arr *a)
 {
-	if (q->first == q->last)
-		return;
-
-	for (int i = q->first; i != q->last; i = (i+1) % SIZE) {
-		if (q->arr[i].type == NIL) {
+	for (int i = 0; i < POOL_SIZE; i++) {
+		if (a->pool[i].type == NIL) {
 			continue;
 		}
 
-		struct entity *e = &q->es[q->arr[i].type];
-		e->pos.x = q->arr[i].x;
+		struct entity *e = &a->e[a->pool[i].type];
+		e->pos.x = a->pool[i].x;
 		entity_render(r, e);
 	}
 }
@@ -165,8 +163,6 @@ int
 main(int argc, char *argv[])
 {
 	struct item_arr items;
-	items.first = 0;
-	items.last = 0;
 	int size = 512;
 	float yvelocity = 0.0;
 
@@ -205,26 +201,32 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
+	items.first = &items.pool[0];
+	for (int i = 0; i < POOL_SIZE; i++) {
+		items.pool[i].next = &items.pool[i+1];
+		items.pool[i].type = NIL;
+	}
+
 	srand(time(NULL));
 
 	SDL_Surface *surface = LoadImage("duck.png");
 	SDL_Texture *ducks = SDL_CreateTextureFromSurface(renderer, surface);
 
 	surface = LoadImage("coin.png");
-	items.es[COIN].sprite = SDL_CreateTextureFromSurface(renderer, surface);
+	items.e[COIN].sprite = SDL_CreateTextureFromSurface(renderer, surface);
 
 	surface = LoadImage("cactus.png");
-	items.es[CACTUS].sprite = SDL_CreateTextureFromSurface(renderer, surface);
+	items.e[CACTUS].sprite = SDL_CreateTextureFromSurface(renderer, surface);
 
 	SDL_FreeSurface(surface);
 
-	items.es[COIN].pos.w = 20;
-	items.es[COIN].pos.h = 20;
-	items.es[COIN].pos.y = 310;
+	items.e[COIN].pos.w = 20;
+	items.e[COIN].pos.h = 20;
+	items.e[COIN].pos.y = 310;
 
-	items.es[CACTUS].pos.w = 20;
-	items.es[CACTUS].pos.h = 50;
-	items.es[CACTUS].pos.y = size/3*2-50;
+	items.e[CACTUS].pos.w = 20;
+	items.e[CACTUS].pos.h = 50;
+	items.e[CACTUS].pos.y = size/3*2-50;
 
 	struct entity pato = {
 		.pos = {
