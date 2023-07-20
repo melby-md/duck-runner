@@ -1,4 +1,4 @@
-CC = $(CROSS)cc -std=c99
+CC = $(CROSS)cc -std=c11
 SDL_CONFIG = sdl2-config
 SDL_FLAGS = --cflags --libs
 WARNINGS = -Wall -Wextra -Wvla -Wno-unused-parameter -Wno-unused-function
