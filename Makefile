@@ -6,7 +6,7 @@ WARNINGS = -Wall -Wextra -Wvla -Wno-unused-parameter -Wno-unused-function
 all: duck-runner
 
 duck-runner: main.c stb_image.h
-	$(CC) $(WARNINGS) $(CFLAGS) -o $@ $< $$($(SDL_CONFIG) $(SDL_FLAGS))
+	$(CC) $(WARNINGS) $(CFLAGS) -o $@ $< $$($(SDL_CONFIG) $(SDL_FLAGS)) -lm
 
 clean:
 	rm -f duck-runner duck-runner.exe
